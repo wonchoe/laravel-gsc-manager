@@ -50,11 +50,17 @@ class GscAnalyticsService
                 $startRow = 0;
                 $page = 0;
 
+                // Discover & googleNews don't support device/searchAppearance dimensions
+                $typeDimensions = $dimensions;
+                if (in_array($type, ['discover', 'googleNews'], true)) {
+                    $typeDimensions = array_values(array_diff($typeDimensions, ['device', 'searchAppearance']));
+                }
+
                 do {
                     $body = [
                         'startDate' => $range->startDate(),
                         'endDate' => $range->endDate(),
-                        'dimensions' => $dimensions,
+                        'dimensions' => $typeDimensions,
                         'type' => $type,
                         'rowLimit' => $rowLimit,
                         'startRow' => $startRow,
@@ -75,7 +81,7 @@ class GscAnalyticsService
                     $stats['requests']++;
 
                     foreach ($rows as $row) {
-                        $this->upsertRow($site, $type, $dimensions, $row, $aggregationType, $dataState);
+                        $this->upsertRow($site, $type, $typeDimensions, $row, $aggregationType, $dataState);
                         $stats['rows_upserted']++;
                     }
 
