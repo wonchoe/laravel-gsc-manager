@@ -52,6 +52,16 @@ class GscManagerServiceProvider extends ServiceProvider
             $this->loadRoutesFrom(__DIR__ . '/../routes/api.php');
         }
 
+        // Register commands unconditionally so Artisan::call() works from web context too
+        $this->commands([
+            DiscoverGscSitesCommand::class,
+            CheckGscAccessCommand::class,
+            SyncGscAnalyticsCommand::class,
+            DiscoverSearchAppearancesCommand::class,
+            SyncGscSitemapsCommand::class,
+            InspectGscUrlsCommand::class,
+        ]);
+
         if ($this->app->runningInConsole()) {
             $this->publishes([
                 __DIR__ . '/../config/gsc-manager.php' => config_path('gsc-manager.php'),
@@ -60,15 +70,6 @@ class GscManagerServiceProvider extends ServiceProvider
             $this->publishes([
                 __DIR__ . '/../database/migrations' => database_path('migrations'),
             ], 'gsc-migrations');
-
-            $this->commands([
-                DiscoverGscSitesCommand::class,
-                CheckGscAccessCommand::class,
-                SyncGscAnalyticsCommand::class,
-                DiscoverSearchAppearancesCommand::class,
-                SyncGscSitemapsCommand::class,
-                InspectGscUrlsCommand::class,
-            ]);
         }
     }
 }
