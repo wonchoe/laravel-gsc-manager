@@ -1,0 +1,9 @@
+/vendor/
+/.env
+/.env.*
+/auth.json
+/google.json
+/*.key
+/*service-account*.json
+/*credentials*.json
+/storage/
