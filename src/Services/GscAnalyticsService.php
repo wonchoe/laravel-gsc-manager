@@ -41,6 +41,7 @@ class GscAnalyticsService
         $rowLimit = min(25000, max(1, (int) config('gsc-manager.analytics.row_limit', 25000)));
         $maxPages = (bool) config('gsc-manager.analytics.paginate', true) ? max(1, (int) config('gsc-manager.analytics.max_pages_per_query', 20)) : 1;
         $dataState = (string) config('gsc-manager.analytics.data_state', 'final');
+        $googleDataState = $dataState;
         $aggregationType = (string) config('gsc-manager.analytics.aggregation_type', 'auto');
 
         try {
@@ -64,7 +65,7 @@ class GscAnalyticsService
                         'type' => $type,
                         'rowLimit' => $rowLimit,
                         'startRow' => $startRow,
-                        'dataState' => $dataState,
+                        'dataState' => $googleDataState,
                         'aggregationType' => $aggregationType,
                     ];
 
@@ -110,6 +111,30 @@ class GscAnalyticsService
     private function upsertRow(GscSite $site, string $type, array $dimensions, mixed $row, string $aggregationType, string $dataState): void
     {
         $keys = method_exists($row, 'getKeys') ? ($row->getKeys() ?: []) : ($row['keys'] ?? []);
+        
+        if (count($keys) > 0 && str_contains((string) $keys[0], 'T')) {
+            try {
+                $carbon = \Illuminate\Support\Carbon::parse((string) $keys[0]);
+                $parsedKeys = [$carbon->format('Y-m-d'), (int) $carbon->format('H')];
+                $parsedDimensions = ['date', 'hour'];
+                
+                for ($i = 1; $i < count($keys); $i++) {
+                    $parsedKeys[] = $keys[$i];
+                }
+                
+                for ($i = 1; $i < count($dimensions); $i++) {
+                    if (!in_array($dimensions[$i], ['date', 'hour'], true)) {
+                        $parsedDimensions[] = $dimensions[$i];
+                    }
+                }
+                
+                $keys = $parsedKeys;
+                $dimensions = $parsedDimensions;
+            } catch (\Throwable $e) {
+                // fallback to default mapping
+            }
+        }
+        
         $values = array_combine($dimensions, array_pad($keys, count($dimensions), null)) ?: [];
 
         $date = $values['date'] ?? null;
@@ -136,7 +161,6 @@ class GscAnalyticsService
             'site_id' => $site->id,
             'type' => $type,
             'aggregation_type' => $aggregationType,
-            'data_state' => $dataState,
         ], $values);
         $attributes['row_hash'] = GscRowHasher::make($hashParts);
 
