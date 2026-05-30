@@ -17,6 +17,7 @@ class GscCredential extends Model
         'last_error' => 'array',
         'last_discovered_at' => 'datetime',
         'last_synced_at' => 'datetime',
+        'token_data' => 'array',
     ];
 
     public function sites(): HasMany

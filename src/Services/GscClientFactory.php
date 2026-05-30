@@ -16,9 +16,64 @@ class GscClientFactory
     {
         $client = new Client();
         $client->setApplicationName('Laravel GSC Manager');
-        $client->setAuthConfig($credentialPath);
-        $client->setScopes([$this->scopeFor($scopeMode)]);
-        $client->setAccessType('offline');
+
+        $credential = null;
+        try {
+            $credential = \Wonchoe\GscManager\Models\GscCredential::where('file_path', $credentialPath)->first();
+        } catch (\Throwable $e) {
+        }
+
+        if ($credential && ($credential->auth_type ?? null) === 'oauth') {
+            $client->setClientId(config('services.google.client_id'));
+            $client->setClientSecret(config('services.google.client_secret'));
+            $client->setScopes([$this->scopeFor($scopeMode)]);
+            $client->setAccessType('offline');
+
+            $tokenData = $credential->token_data;
+            if ($tokenData) {
+                $client->setAccessToken($tokenData);
+            }
+
+            if ($client->isAccessTokenExpired()) {
+                $refreshToken = $client->getRefreshToken();
+                if ($refreshToken) {
+                    try {
+                        $newToken = $client->fetchAccessTokenWithRefreshToken($refreshToken);
+                        if (isset($newToken['error'])) {
+                            $errorMsg = 'OAuth token refresh failed: ' . ($newToken['error_description'] ?? $newToken['error']);
+                            $credential->update([
+                                'active' => false,
+                                'last_error' => ['message' => $errorMsg, 'code' => $newToken['error']],
+                            ]);
+                            throw new \Exception($errorMsg);
+                        } else {
+                            $updatedToken = array_merge($tokenData ?? [], $newToken);
+                            $client->setAccessToken($updatedToken);
+                            $credential->update([
+                                'token_data' => $updatedToken,
+                                'last_error' => null,
+                            ]);
+                        }
+                    } catch (\Throwable $ex) {
+                        $credential->update([
+                            'active' => false,
+                            'last_error' => ['message' => 'Exception during token refresh: ' . $ex->getMessage()],
+                        ]);
+                        throw $ex;
+                    }
+                } else {
+                    $credential->update([
+                        'active' => false,
+                        'last_error' => ['message' => 'Missing refresh token. Re-authorization required.'],
+                    ]);
+                    throw new \Exception('Missing refresh token. Re-authorization required.');
+                }
+            }
+        } else {
+            $client->setAuthConfig($credentialPath);
+            $client->setScopes([$this->scopeFor($scopeMode)]);
+            $client->setAccessType('offline');
+        }
 
         return $client;
     }
@@ -27,8 +82,42 @@ class GscClientFactory
     {
         $client = new Client();
         $client->setApplicationName('Laravel GSC Manager Indexing');
-        $client->setAuthConfig($credentialPath);
-        $client->setScopes([(string) config('gsc-manager.scopes.indexing')]);
+
+        $credential = null;
+        try {
+            $credential = \Wonchoe\GscManager\Models\GscCredential::where('file_path', $credentialPath)->first();
+        } catch (\Throwable $e) {
+        }
+
+        if ($credential && ($credential->auth_type ?? null) === 'oauth') {
+            $client->setClientId(config('services.google.client_id'));
+            $client->setClientSecret(config('services.google.client_secret'));
+            $client->setScopes([(string) config('gsc-manager.scopes.indexing')]);
+            $client->setAccessType('offline');
+
+            $tokenData = $credential->token_data;
+            if ($tokenData) {
+                $client->setAccessToken($tokenData);
+            }
+
+            if ($client->isAccessTokenExpired()) {
+                $refreshToken = $client->getRefreshToken();
+                if ($refreshToken) {
+                    try {
+                        $newToken = $client->fetchAccessTokenWithRefreshToken($refreshToken);
+                        if (!isset($newToken['error'])) {
+                            $updatedToken = array_merge($tokenData ?? [], $newToken);
+                            $client->setAccessToken($updatedToken);
+                            $credential->update(['token_data' => $updatedToken]);
+                        }
+                    } catch (\Throwable $ex) {
+                    }
+                }
+            }
+        } else {
+            $client->setAuthConfig($credentialPath);
+            $client->setScopes([(string) config('gsc-manager.scopes.indexing')]);
+        }
 
         return $client;
     }
