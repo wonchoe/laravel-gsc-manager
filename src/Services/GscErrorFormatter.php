@@ -28,8 +28,8 @@ class GscErrorFormatter
 
     public function redactString(string $value): string
     {
-        $value = preg_replace('/-----BEGIN PRIVATE KEY-----.*?-----END PRIVATE KEY-----/s', '[redacted-private-key]', $value) ?? $value;
-        $value = preg_replace('/"private_key"\s*:\s*"[^"]+"/', '"private_key":"[redacted]"', $value) ?? $value;
+        $value = preg_replace('/-----BEGIN (?:[A-Z]+ )?PRIVATE KEY-----.*?-----END (?:[A-Z]+ )?PRIVATE KEY-----/s', '[redacted-private-key]', $value) ?? $value;
+        $value = preg_replace('/"private_key(?:_id)?"\s*:\s*"(?:[^"\\\\]|\\\\.)*"/', '"private_key":"[redacted]"', $value) ?? $value;
         $credentialsPath = (string) config('gsc-manager.credentials_path', '');
 
         if ($credentialsPath !== '') {

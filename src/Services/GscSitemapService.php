@@ -84,33 +84,38 @@ class GscSitemapService
     private function saveSitemap(GscSite $site, mixed $sitemap): GscSitemap
     {
         $path = (string) $sitemap->getPath();
-        $model = GscSitemap::updateOrCreate(
-            ['gsc_site_id' => $site->id, 'path_hash' => hash('sha256', $path)],
-            [
-                'path' => $path,
-                'type' => $sitemap->getType(),
-                'is_pending' => (bool) $sitemap->getIsPending(),
-                'is_sitemaps_index' => (bool) $sitemap->getIsSitemapsIndex(),
-                'last_submitted_at' => $this->dateOrNull($sitemap->getLastSubmitted()),
-                'last_downloaded_at' => $this->dateOrNull($sitemap->getLastDownloaded()),
-                'warnings' => (int) $sitemap->getWarnings(),
-                'errors' => (int) $sitemap->getErrors(),
-                'raw' => json_decode(json_encode($sitemap->toSimpleObject()), true),
-            ],
-        );
 
-        foreach ($sitemap->getContents() ?: [] as $content) {
-            GscSitemapContent::updateOrCreate(
-                ['gsc_sitemap_id' => $model->id, 'content_type' => (string) $content->getType()],
+        // Sitemap row + its content rows are written atomically so a mid-loop failure
+        // never leaves the sitemap with partially-updated contents.
+        return \Illuminate\Support\Facades\DB::transaction(function () use ($site, $sitemap, $path): GscSitemap {
+            $model = GscSitemap::updateOrCreate(
+                ['gsc_site_id' => $site->id, 'path_hash' => hash('sha256', $path)],
                 [
-                    'submitted' => $content->getSubmitted(),
-                    'indexed' => method_exists($content, 'getIndexed') ? $content->getIndexed() : null,
-                    'raw' => json_decode(json_encode($content->toSimpleObject()), true),
+                    'path' => $path,
+                    'type' => $sitemap->getType(),
+                    'is_pending' => (bool) $sitemap->getIsPending(),
+                    'is_sitemaps_index' => (bool) $sitemap->getIsSitemapsIndex(),
+                    'last_submitted_at' => $this->dateOrNull($sitemap->getLastSubmitted()),
+                    'last_downloaded_at' => $this->dateOrNull($sitemap->getLastDownloaded()),
+                    'warnings' => (int) $sitemap->getWarnings(),
+                    'errors' => (int) $sitemap->getErrors(),
+                    'raw' => json_decode(json_encode($sitemap->toSimpleObject()), true),
                 ],
             );
-        }
 
-        return $model;
+            foreach ($sitemap->getContents() ?: [] as $content) {
+                GscSitemapContent::updateOrCreate(
+                    ['gsc_sitemap_id' => $model->id, 'content_type' => (string) $content->getType()],
+                    [
+                        'submitted' => $content->getSubmitted(),
+                        'indexed' => method_exists($content, 'getIndexed') ? $content->getIndexed() : null,
+                        'raw' => json_decode(json_encode($content->toSimpleObject()), true),
+                    ],
+                );
+            }
+
+            return $model;
+        });
     }
 
     private function dateOrNull(?string $value): ?Carbon

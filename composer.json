@@ -1,44 +1,55 @@
 {
-  "name": "wonchoe/laravel-gsc-manager",
-  "description": "Reusable Laravel package for discovering, storing, and syncing Google Search Console data via service account JSON credentials.",
-  "type": "library",
-  "license": "MIT",
-  "keywords": [
-    "laravel",
-    "google-search-console",
-    "search-console",
-    "gsc",
-    "seo",
-    "service-account",
-    "analytics"
-  ],
-  "authors": [
-    {
-      "name": "Wonchoe"
-    }
-  ],
-  "support": {
-    "issues": "https://github.com/wonchoe/laravel-gsc-manager/issues",
-    "source": "https://github.com/wonchoe/laravel-gsc-manager"
-  },
-  "require": {
-    "php": "^8.2",
-    "illuminate/support": "^10.0|^11.0|^12.0",
-    "illuminate/database": "^10.0|^11.0|^12.0",
-    "google/apiclient": "^2.0"
-  },
-  "autoload": {
-    "psr-4": {
-      "Wonchoe\\GscManager\\": "src/"
-    }
-  },
-  "extra": {
-    "laravel": {
-      "providers": [
-        "Wonchoe\\GscManager\\GscManagerServiceProvider"
-      ]
-    }
-  },
-  "minimum-stability": "stable",
-  "prefer-stable": true
+    "name": "wonchoe/laravel-gsc-manager",
+    "description": "Reusable Laravel package for discovering, storing, and syncing Google Search Console data via service account JSON credentials.",
+    "type": "library",
+    "license": "MIT",
+    "keywords": [
+        "laravel",
+        "google-search-console",
+        "search-console",
+        "gsc",
+        "seo",
+        "service-account",
+        "analytics"
+    ],
+    "authors": [
+        {
+            "name": "Wonchoe"
+        }
+    ],
+    "support": {
+        "issues": "https://github.com/wonchoe/laravel-gsc-manager/issues",
+        "source": "https://github.com/wonchoe/laravel-gsc-manager"
+    },
+    "require": {
+        "php": "^8.2",
+        "illuminate/support": "^10.0|^11.0|^12.0|^13.0",
+        "illuminate/database": "^10.0|^11.0|^12.0|^13.0",
+        "google/apiclient": "^2.0"
+    },
+    "require-dev": {
+        "phpunit/phpunit": "^10.5|^11.0"
+    },
+    "autoload": {
+        "psr-4": {
+            "Wonchoe\\GscManager\\": "src/"
+        }
+    },
+    "autoload-dev": {
+        "psr-4": {
+            "Wonchoe\\GscManager\\Tests\\": "tests/"
+        }
+    },
+    "scripts": {
+        "test": "phpunit"
+    },
+    "extra": {
+        "laravel": {
+            "providers": [
+                "Wonchoe\\GscManager\\GscManagerServiceProvider"
+            ]
+        }
+    },
+    "minimum-stability": "stable",
+    "prefer-stable": true
 }

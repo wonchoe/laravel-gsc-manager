@@ -105,13 +105,21 @@ class GscClientFactory
                 if ($refreshToken) {
                     try {
                         $newToken = $client->fetchAccessTokenWithRefreshToken($refreshToken);
-                        if (!isset($newToken['error'])) {
-                            $updatedToken = array_merge($tokenData ?? [], $newToken);
-                            $client->setAccessToken($updatedToken);
-                            $credential->update(['token_data' => $updatedToken]);
+                        if (isset($newToken['error'])) {
+                            $errorMsg = 'OAuth token refresh failed: ' . ($newToken['error_description'] ?? $newToken['error']);
+                            $credential->update(['active' => false, 'last_error' => ['message' => $errorMsg, 'code' => $newToken['error']]]);
+                            throw new \Exception($errorMsg);
                         }
+                        $updatedToken = array_merge($tokenData ?? [], $newToken);
+                        $client->setAccessToken($updatedToken);
+                        $credential->update(['token_data' => $updatedToken, 'last_error' => null]);
                     } catch (\Throwable $ex) {
+                        $credential->update(['active' => false, 'last_error' => ['message' => 'Exception during token refresh: ' . $ex->getMessage()]]);
+                        throw $ex;
                     }
+                } else {
+                    $credential->update(['active' => false, 'last_error' => ['message' => 'Missing refresh token. Re-authorization required.']]);
+                    throw new \Exception('Missing refresh token. Re-authorization required.');
                 }
             }
         } else {

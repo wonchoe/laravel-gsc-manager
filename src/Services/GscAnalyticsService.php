@@ -46,15 +46,30 @@ class GscAnalyticsService
 
         try {
             $service = $this->clients->make($site->credential->file_path, 'readonly');
+        } catch (\Throwable $exception) {
+            // Auth / client construction failed — the whole sync cannot proceed.
+            $stats['errors']++;
+            $error = $this->errors->format($exception);
+            $site->forceFill(['status' => $site->status === 'approved' ? 'approved' : 'error', 'last_error' => $error])->save();
+            $this->log($site, 'failed', $started, 'Analytics sync failed.', $stats, $error);
 
-            foreach ($types as $type) {
+            return $stats;
+        }
+
+        // Isolate each search type: GSC rejects unsupported dimensions per type with HTTP 400,
+        // and one failing type must not abort the rows already collected for the others.
+        $lastError = null;
+        foreach ($types as $type) {
+            try {
                 $startRow = 0;
                 $page = 0;
 
-                // Discover & googleNews don't support device/searchAppearance dimensions
+                // Per-type dimension restrictions: discover/googleNews have no device/searchAppearance;
+                // discover additionally has no query dimension.
                 $typeDimensions = $dimensions;
                 if (in_array($type, ['discover', 'googleNews'], true)) {
-                    $typeDimensions = array_values(array_diff($typeDimensions, ['device', 'searchAppearance']));
+                    // discover & googleNews only support date, country and page dimensions.
+                    $typeDimensions = array_values(array_diff($typeDimensions, ['device', 'searchAppearance', 'query']));
                 }
 
                 do {
@@ -89,17 +104,27 @@ class GscAnalyticsService
                     $page++;
                     $startRow += $rowLimit;
                 } while (count($rows) === $rowLimit && $page < $maxPages);
+            } catch (\Throwable $exception) {
+                $stats['errors']++;
+                $lastError = $this->errors->format($exception);
+                $this->log($site, 'failed', $started, "Analytics sync failed for type '{$type}'.", $stats, $lastError);
             }
-
-            $site->forceFill(['last_analytics_synced_at' => Carbon::now(), 'last_error' => null])->save();
-            $site->credential?->forceFill(['last_synced_at' => Carbon::now()])->save();
-            $this->log($site, 'success', $started, 'Analytics sync completed.', $stats);
-        } catch (\Throwable $exception) {
-            $stats['errors']++;
-            $error = $this->errors->format($exception);
-            $site->forceFill(['status' => $site->status === 'approved' ? 'approved' : 'error', 'last_error' => $error])->save();
-            $this->log($site, 'failed', $started, 'Analytics sync failed.', $stats, $error);
         }
+
+        $site->forceFill([
+            'last_analytics_synced_at' => Carbon::now(),
+            'last_error' => $stats['errors'] === 0 ? null : $lastError,
+        ])->save();
+        $site->credential?->forceFill(['last_synced_at' => Carbon::now()])->save();
+
+        $this->log(
+            $site,
+            $stats['errors'] === 0 ? 'success' : 'partial',
+            $started,
+            $stats['errors'] === 0 ? 'Analytics sync completed.' : 'Analytics sync completed with errors.',
+            $stats,
+            $stats['errors'] === 0 ? null : $lastError,
+        );
 
         return $stats;
     }
@@ -114,7 +139,9 @@ class GscAnalyticsService
         
         if (count($keys) > 0 && str_contains((string) $keys[0], 'T')) {
             try {
-                $carbon = \Illuminate\Support\Carbon::parse((string) $keys[0]);
+                // Normalise to GSC's reference timezone (matches GscDateRange) so the
+                // date/hour split is stable regardless of the app timezone.
+                $carbon = \Illuminate\Support\Carbon::parse((string) $keys[0])->setTimezone('America/Los_Angeles');
                 $parsedKeys = [$carbon->format('Y-m-d'), (int) $carbon->format('H')];
                 $parsedDimensions = ['date', 'hour'];
                 
@@ -157,10 +184,13 @@ class GscAnalyticsService
             'raw' => method_exists($row, 'toSimpleObject') ? json_decode(json_encode($row->toSimpleObject()), true) : (array) $row,
         ];
 
+        // data_state MUST be part of the hash, otherwise a 'preliminary' (fresh) row and the
+        // later 'final' row for the same dimensions collide and overwrite each other.
         $hashParts = array_merge([
             'site_id' => $site->id,
             'type' => $type,
             'aggregation_type' => $aggregationType,
+            'data_state' => $dataState,
         ], $values);
         $attributes['row_hash'] = GscRowHasher::make($hashParts);
 

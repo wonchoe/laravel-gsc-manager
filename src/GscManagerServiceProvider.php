@@ -7,6 +7,7 @@ use Wonchoe\GscManager\Console\CheckGscAccessCommand;
 use Wonchoe\GscManager\Console\DiscoverGscSitesCommand;
 use Wonchoe\GscManager\Console\DiscoverSearchAppearancesCommand;
 use Wonchoe\GscManager\Console\InspectGscUrlsCommand;
+use Wonchoe\GscManager\Console\PruneGscDataCommand;
 use Wonchoe\GscManager\Console\SyncGscAnalyticsCommand;
 use Wonchoe\GscManager\Console\SyncGscSitemapsCommand;
 use Wonchoe\GscManager\Services\GscAccessCheckService;
@@ -48,7 +49,9 @@ class GscManagerServiceProvider extends ServiceProvider
     {
         $this->loadMigrationsFrom(__DIR__ . '/../database/migrations');
 
-        if ((bool) config('gsc-manager.routes.enabled', true)) {
+        // Secure-by-default: routes are off unless explicitly enabled (they include credential
+        // listing + sitemap delete and must never be served unauthenticated).
+        if ((bool) config('gsc-manager.routes.enabled', false)) {
             $this->loadRoutesFrom(__DIR__ . '/../routes/api.php');
         }
 
@@ -60,7 +63,12 @@ class GscManagerServiceProvider extends ServiceProvider
             DiscoverSearchAppearancesCommand::class,
             SyncGscSitemapsCommand::class,
             InspectGscUrlsCommand::class,
+            PruneGscDataCommand::class,
         ]);
+
+        if ($this->app->runningInConsole()) {
+            $this->validateConfig();
+        }
 
         if ($this->app->runningInConsole()) {
             $this->publishes([
@@ -70,6 +78,25 @@ class GscManagerServiceProvider extends ServiceProvider
             $this->publishes([
                 __DIR__ . '/../database/migrations' => database_path('migrations'),
             ], 'gsc-migrations');
+        }
+    }
+
+    /**
+     * Fail fast (console only) on clearly-invalid config instead of deep at runtime.
+     */
+    private function validateConfig(): void
+    {
+        $scopes = (array) config('gsc-manager.scopes', []);
+        $defaultScope = (string) config('gsc-manager.default_scope', 'readonly');
+        if (! array_key_exists($defaultScope, $scopes)) {
+            throw new \RuntimeException("gsc-manager.default_scope '{$defaultScope}' is not defined in gsc-manager.scopes.");
+        }
+
+        foreach (['analytics.row_limit', 'analytics.max_pages_per_query', 'rate_limits.max_retries'] as $key) {
+            $value = config("gsc-manager.{$key}");
+            if ($value !== null && (! is_numeric($value) || (int) $value < 1)) {
+                throw new \RuntimeException("gsc-manager.{$key} must be a positive integer.");
+            }
         }
     }
 }

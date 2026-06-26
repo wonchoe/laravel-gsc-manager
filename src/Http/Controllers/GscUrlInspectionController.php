@@ -24,7 +24,15 @@ class GscUrlInspectionController extends Controller
         $result = $inspection->inspect($site->loadMissing('credential'), $validated['inspectionUrl'], $validated['languageCode'] ?? null);
 
         if ($result->last_error) {
-            return $this->ok($result, 'URL inspection failed.', $result->last_error);
+            // Log the formatted detail server-side; return only a generic message so error
+            // class names / quota reasons are not exposed to the caller.
+            \Illuminate\Support\Facades\Log::warning('GSC URL inspection failed', [
+                'site_id' => $site->id,
+                'inspection_url' => $validated['inspectionUrl'],
+                'error' => $result->last_error,
+            ]);
+
+            return $this->ok($result->makeHidden('last_error'), 'URL inspection failed.');
         }
 
         return $this->ok($result, 'URL inspected.');

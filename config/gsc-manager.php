@@ -43,11 +43,13 @@ return [
         'allowed_types' => ['JobPosting', 'BroadcastEvent'],
     ],
 
+    // Built-in API routes are OFF by default and gated by web+auth when enabled.
+    // They include credential listing + sitemap delete, so never expose them unauthenticated.
     'routes' => [
-        'enabled' => true,
+        'enabled' => false,
         'prefix' => 'api/gsc',
         'name_prefix' => 'gsc-manager.',
-        'middleware' => ['api'],
+        'middleware' => ['web', 'auth'],
     ],
 
     'rate_limits' => [

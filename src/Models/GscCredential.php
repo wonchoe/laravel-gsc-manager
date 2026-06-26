@@ -9,7 +9,7 @@ class GscCredential extends Model
 {
     protected $guarded = [];
 
-    protected $hidden = ['file_path'];
+    protected $hidden = ['file_path', 'token_data', 'last_error'];
 
     protected $casts = [
         'active' => 'boolean',
